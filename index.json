@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-06-30T03:49:17.823Z",
-  "release": "2026-06-29T22:57:48.903Z",
+  "generatedAt": "2026-07-01T04:32:46.967Z",
+  "release": "2026-07-01T04:32:38.849Z",
   "sourceSha": "37dd6485b7d029e3ecc859b0c4dba1617acbcd16",
   "rawBase": "https://raw.githubusercontent.com/cfw-social/cfw-skills/main",
   "recipes": {
@@ -324,7 +324,7 @@
     },
     "p-clone-reel": {
       "version": "1.0.0",
-      "checksum": "sha256:00c47ec5882fb9d1f6c0546070d164924511f6705cebf12683730a15ecc55aa5",
+      "checksum": "sha256:5d93f99ee7595745acad6ac1b7bd4b0679e27027f79b739fab28dc5a117b368a",
       "files": [
         ".hub/c-audio/LEARNINGS.md",
         ".hub/c-audio/SKILL.md",
@@ -475,7 +475,7 @@
         ".hub/f-remotion/rules/videos.md": "sha256:d9d3032a57f92c759daf0bd60b3282f6810ecc9958e9093a6b828de623b05328",
         ".hub/f-remotion/rules/voiceover.md": "sha256:60340034cf422052007183d031171b3c88422dd3fe85f0d915283dd8ec5df3e8",
         "LEARNINGS.md": "sha256:a8aa1e7334ebafb5793678f5cc6f724065795c47e9c6e8119cda174988b9bd6e",
-        "SKILL.md": "sha256:4937b257df548ad82eaa0315ac349f3b9a48d2f370fae3e00aed3dadd8474a6c",
+        "SKILL.md": "sha256:0d59a012330dfcb22eca85b4fac251e8461d7c92c33b287add7b71204ad33453",
         "acceptance.json": "sha256:ac27c945f702e28bcc5e965d6d40766067c32416052eacba4212c08f62b729bd",
         "examples.json": "sha256:57c7d12c47e46532de2ffc7bf148f462d301abef2d939fa0f752092a81ab6207"
       },
