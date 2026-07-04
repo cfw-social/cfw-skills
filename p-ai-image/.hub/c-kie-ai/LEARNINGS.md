@@ -6,7 +6,30 @@
 
 ## Active Feedback (apply on every run)
 
-*None yet — add feedback below and it becomes part of this skill's behavior.*
+- **VIDEO GATE — user approval before any video spend (2026-07-03).** Video costs
+  300–1300 credits vs ~6 per image. Before ANY video createTask: show the user the
+  exact start-frame image(s) + estimated credits and get an explicit yes. Through
+  kie-studio this is enforced (`plan create` → user approves → `plan approve` →
+  `generate --plan <id>`); on raw API calls YOU are the gate — never skip it.
+
+- **Never trust reference-field names from memory (2026-07-03).** The ref key
+  differs per model (`input_urls` / `image_urls` / `image_url` / `image_input`) and
+  KIE silently ignores unknown keys — the wrong key silently degrades i2i/i2v to
+  pure text-to-image. Check `models.jsonl` or kie-studio's
+  `data/model-contracts.yaml` for the exact key; after createTask, confirm
+  `recordInfo.param` echoes your reference URLs. kie-studio validates this
+  automatically ("no contract, no spend") — prefer it when it covers the model.
+
+- **`gpt-image-2-image-to-image` requires `input_urls`, NOT `image_urls`.**
+  The KIE API silently ignores `image_urls` for this model and falls back to text-to-image,
+  producing a generic/whitened face with weak identity. The correct field name is
+  `input_urls` (array of public URLs). Confirmed 2026-07-03 by inspecting `recordInfo.param`
+  for both a working task (used `input_urls`) and a failing task (used `image_urls`).
+  The correct call:
+  ```bash
+  node bin/kie-studio.mjs generate --model gpt-image-2-image-to-image \
+    --input '{"prompt":"...","input_urls":["<url1>","<url2>"],"size":"1024x1536","quality":"high"}'
+  ```
 
 ---
 

@@ -1,15 +1,25 @@
 ---
 name: c-kie-ai
-description: AI image and video generation via kie.ai and fal.ai. Use for FLUX image gen, Hailuo i2v, Sora-2, Kling, WAN, Seedance, Veo-3, GPT Image, Imagen 4, Z-Image, Grok-imagine, InfiniTalk, MiniMax video. Direct API calls — replaces FloeAPI as primary i2v provider.
-when_to_use: Trigger on kie.ai, KIE_AI_API_KEY, Hailuo video, hailuo i2v, Sora-2 video, Kling avatar, InfiniTalk, WAN video kie, Seedance kie, GPT image kie, Imagen 4 kie, Z-image, grok-imagine, image-to-video production, fal.ai, FAL_KEY, FLUX image, fal queue.
+description: "⚠ DEPRECATED (2026-07-03) for kie.ai work — superseded by kie-studio (~/Code/video-hub/kie-studio): use the kie-studio MCP server (mcp__kie-studio__* tools) or its skills (kie-image / kie-motion / kie-product / kie-ugc-ad / kie-cinematic-broll). kie-studio adds wire-contract validation (no silent field drops), live schema drift checks, and the human-approved video gate — raw curl calls here have NONE of those rails. This skill remains ONLY for fal.ai flows (FLUX via fal, fal queue) and for kie.ai models kie-studio has no contract for yet (add the contract instead when possible)."
+when_to_use: fal.ai, FAL_KEY, FLUX via fal, fal queue. For kie.ai / KIE_AI_API_KEY / Seedance / Veo / GPT Image / nano-banana etc. use kie-studio instead (MCP mcp__kie-studio__* or its skills).
 allowed-tools: Bash
 kind: component
 visibility: internal
 providers: fal, kie
+deprecated: kie.ai flows superseded by kie-studio 2026-07-03
 ---
 
 
 # AI Media Generation — kie.ai + fal.ai
+
+> **⚠ DEPRECATED for kie.ai (2026-07-03).** kie-studio is the successor for ALL
+> kie.ai generation: MCP server `kie-studio` (tools `kie_lookbook_search`,
+> `kie_compose`, `kie_plan_create/approve`, `kie_generate`, …) or the kie-* skills.
+> It enforces the rails raw curl cannot: per-model wire contracts ("no contract,
+> no spend"), live drift checks against kie.ai, and the video approval gate.
+> Use THIS skill only for **fal.ai** — or, exceptionally, a kie.ai model that has
+> no kie-studio contract yet (prefer adding the contract to
+> `~/Code/video-hub/kie-studio/data/model-contracts.yaml` over calling raw).
 
 
 > **SELF-IMPROVEMENT RULE — READ FIRST:**
@@ -19,6 +29,22 @@ providers: fal, kie
 > 4. After completing the task, ask the user: "How did this go? Any corrections or improvements for next time?"
 > 5. Summarize the feedback into 1–3 bullet points and append to `LEARNINGS.md` with today's date.
 > 6. If feedback is critical (affects correctness or quality), add it to the **Active Feedback** section so it applies on every future run.
+
+> **🚦 SPEND-SAFETY RULES (2026-07-03 — apply to EVERY paid call, both providers):**
+> 1. **Prefer kie-studio when it covers the model** (`~/Code/video-hub/kie-studio`,
+>    `node bin/kie-studio.mjs`): it validates every input against per-model wire
+>    contracts (`data/model-contracts.yaml` — wrong key = hard error, because Kie
+>    SILENTLY IGNORES unknown input keys) and gates video behind user approval.
+> 2. **Raw API calls: never trust field names from memory.** The reference-image key
+>    differs per model (`input_urls` vs `image_urls` vs `image_url` vs `image_input`).
+>    Check `models.jsonl` / the contract for the EXACT key — the wrong one silently
+>    degrades i2i/i2v to pure text generation (this cost 50+ renders on 2026-07-03).
+>    After createTask, verify `recordInfo.param` echoes your reference URLs.
+> 3. **VIDEO = GATED, no exceptions.** Before ANY video createTask (Seedance, Veo,
+>    Sora, Kling, Hailuo, WAN…): show the user the exact start-frame image(s) and the
+>    estimated credit cost, and get an explicit yes ("approve" / "approve all").
+>    Never spend video credits on an unconfirmed start frame — a wrong frame burned
+>    600 credits once. Images (~6 credits) don't need the gate; video always does.
 
 Two providers, one skill. Use kie.ai as primary (largest model catalog). Use fal.ai for FLUX image gen and queue-based video when needed.
 
