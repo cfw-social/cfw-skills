@@ -106,7 +106,7 @@ for k, v in replacements.items():
 with open(dst, "w") as f:
     f.write(f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<style>html,body{{margin:0;padding:0;width:1080px;height:1920px;overflow:hidden;}}</style>
+<style>html,body{{margin:0;padding:0;width:1080px;height:1920px;overflow:hidden;background:#0F172A;}}</style>
 </head><body>{body}</body></html>""")
 PY
 

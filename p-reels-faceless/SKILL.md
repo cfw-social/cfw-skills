@@ -491,7 +491,7 @@ with open(dst, "w") as f:
     # window.__timelines["root"] = tl (dict form) is required — NOT .push().
     f.write(f"<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\">"
             "<script src=\"gsap.min.js\"></script>"
-            "<style>html,body{{margin:0;padding:0;width:1080px;height:1920px;overflow:hidden;}}</style>"
+            "<style>html,body{{margin:0;padding:0;width:1080px;height:1920px;overflow:hidden;background:#0F172A;}}</style>"
             f"</head><body>{tmpl}</body></html>")
 PY
 # box-compat: gpt-5.5 sometimes emits a double-hash hex (##0F172A) → white bg. Collapse it

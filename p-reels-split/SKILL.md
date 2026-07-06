@@ -587,7 +587,7 @@ else:
         idx_html = (
             f'<!DOCTYPE html>\n<html><head><meta charset="utf-8">\n'
             f'<script src="gsap.min.js"></script>\n'  # vendored locally — never a CDN (copied into gdir below)
-            f'<style>html,body{{margin:0;padding:0;width:1080px;height:960px;overflow:hidden;}}</style>\n'
+            f'<style>html,body{{margin:0;padding:0;width:1080px;height:960px;overflow:hidden;background:#0F172A;}}</style>\n'
             f'</head><body>{body}</body></html>'
         )
     else:
@@ -616,7 +616,7 @@ else:
         idx_html = (
             f'<!DOCTYPE html>\n<html><head><meta charset="utf-8">\n'
             f'<script src="gsap.min.js"></script>\n'  # vendored locally — never a CDN (copied into gdir below)
-            f'<style>html,body{{margin:0;padding:0;width:1080px;height:960px;overflow:hidden;}}</style>\n'
+            f'<style>html,body{{margin:0;padding:0;width:1080px;height:960px;overflow:hidden;background:#0F172A;}}</style>\n'
             f'</head><body>{body}</body></html>'
         )
 
