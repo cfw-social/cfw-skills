@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-07-07T14:09:01.546Z",
-  "release": "2026-07-07T14:08:53.907Z",
-  "sourceSha": "a5f7dac31420da108bc5c1c0ea85f692a3d0655b",
+  "generatedAt": "2026-07-07T20:52:23.734Z",
+  "release": "2026-07-07T20:51:58.208Z",
+  "sourceSha": "a5e59cee6ca9300ee89a1e86f2f60892edaa6f92",
   "rawBase": "https://raw.githubusercontent.com/cfw-social/cfw-skills/main",
   "recipes": {
     "p-ai-character": {
