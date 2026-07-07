@@ -1112,6 +1112,40 @@ bash .hub/c-eval-runner/scripts/eval-run.sh composite.mp4 --recipe-dir "$SKILL_D
 See `.hub/c-eval-runner/SKILL.md` for the spec format + built-in checks, and
 `cfw-skills-pack/docs/skills-audit.md` §4 for the generic eval architecture.
 
+### Step 11.9 — DELIVERY GATE (MECHANICAL · HARD · blocks upload)
+
+**Runs immediately before upload. If it exits non-zero, STOP — do NOT upload or propose.** It
+proves mechanically that the premium pass actually ran (via the stamp c-reel-premium writes) and
+that the eval scorecard is not FAIL, so a degraded reel can't ship silently.
+
+```bash
+python3 - "$OUT" "$W" <<'PY' || { echo "🚫 DELIVERY BLOCKED — fix the render/premium pass and re-run; do NOT upload."; exit 1; }
+import os, sys, json, glob, subprocess
+FINAL, W = sys.argv[1], sys.argv[2]
+fail = []
+stamps = glob.glob(f"{W}/**/.gate/premium.json", recursive=True)
+if not any(json.load(open(s)).get("applied") for s in stamps if os.path.exists(s)):
+    fail.append("premium stamp missing — c-reel-premium did not run (raw caption burns are a defect).")
+sc = os.path.join(os.path.dirname(os.path.abspath(FINAL)), "eval", "scorecard.json")
+if not os.path.exists(sc):
+    fail.append("c-eval-runner scorecard missing — run the QA gate before delivery.")
+elif json.load(open(sc)).get("verdict") == "FAIL":
+    fail.append("c-eval-runner scorecard verdict = FAIL.")
+p = subprocess.run(["ffprobe","-v","error","-select_streams","v:0","-show_entries","stream=width,height","-of","json", FINAL], capture_output=True, text=True)
+if p.returncode != 0:
+    fail.append(f"final MP4 {FINAL} not a valid video.")
+else:
+    s = json.loads(p.stdout)["streams"][0]
+    if (s["width"], s["height"]) != (1080, 1920):
+        fail.append(f"final dims {s['width']}x{s['height']} != 1080x1920.")
+if fail:
+    print("DELIVERY GATE FAILURES:")
+    for f in fail: print(f"  ✗ {f}")
+    sys.exit(1)
+print("✅ DELIVERY GATE PASSED — premium pass + eval verified. OK to upload.")
+PY
+```
+
 ### Step 12 — Upload to R2 and print the URL (LAST LINE)
 
 ```bash

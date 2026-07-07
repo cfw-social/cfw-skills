@@ -163,6 +163,22 @@ for pct in 10 35 60 85; do
   t=$(python3 -c "print(round($DUR*0.$pct,1))")
   ffmpeg -v error -y -ss "$t" -i "$REEL_OUT" -frames:v 1 "$PW/qa_$pct.png"
 done
+
+# DELIVERY-GATE PROOF — every reel recipe's delivery gate reads this. Writing it is how the
+# gate knows the premium pass (kinetic captions + SFX + grade) ACTUALLY ran on this reel, so a
+# rushed executor can't hand-burn captions with raw ffmpeg and pass it off as premium. The stamp
+# lands next to REEL_OUT so each recipe (whose $W == dirname of its polished output) finds it.
+python3 - "$REEL_OUT" <<'PY'
+import os, sys, json
+out = sys.argv[1]
+gate = os.path.join(os.path.dirname(os.path.abspath(out)), ".gate")
+os.makedirs(gate, exist_ok=True)
+assert os.path.exists(out) and os.path.getsize(out) > 100_000, "REEL_OUT missing/empty — premium pass did not produce output"
+json.dump({"applied": True, "captions": os.environ.get("CAPTIONS", "on"),
+           "sfx": os.environ.get("SFX", "on"), "by": "c-reel-premium"},
+          open(os.path.join(gate, "premium.json"), "w"))
+print(f"[gate-stamp] premium: applied → {gate}/premium.json")
+PY
 ```
 
 READ each frame with your vision: captions legible in the band, accent on emphasis words, **zero
