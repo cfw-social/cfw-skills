@@ -204,6 +204,13 @@ fi
 
 ### Step 3 — Transcribe with WORD timestamps
 
+> **Run the block below VERBATIM. Do NOT invent your own `cfw-transcribe` invocation.**
+> `cfw-transcribe --format` accepts ONLY `text | segments | srt | vtt` — **there is no `words`
+> format** (`--format words` is a hard error). Word-level timing is derived by converting the SRT
+> in the `python3` step below; that is the only supported path. Word-timestamp guidance lives in
+> the vendored sub-skill — read it with `skill_view` on skill **`f-hyperframes`**, file
+> **`references/transcript-guide.md`** (NOT under `p-reels-spotlight`, which has no `references/` dir).
+
 ```bash
 # Fallback chain: cfw-transcribe (preferred) → mlx_whisper → whisper → npx hyperframes@0.7.5 transcribe.
 # known_transcript path: if provided externally (e.g. by p-reels-spotlight-heygen wrapper), write
@@ -256,7 +263,7 @@ fi
 # Hinglish/multilingual → --model medium. Output: word-level transcript JSON.
 ```
 
-Run the transcript quality check (`f-hyperframes/references/transcript-guide.md`): if >20% of
+Run the transcript quality check (read it via `skill_view` on skill `f-hyperframes`, file `references/transcript-guide.md`): if >20% of
 entries are `♪`/garbage, retry with `--model medium`; strip non-word entries. Save the cleaned
 word array to `$W/words.json` (`[{text,start,end}]`).
 
@@ -577,10 +584,35 @@ foreground call gets killed at the runtime ceiling and the cook fails with no re
 - `terminal(command="cd $W/comp && npx hyperframes@0.7.5 render --output $W/visuals.mp4 --fps 30 --quality high", background=true, notify_on_complete=true)` → returns a `session_id`
 - `process(action="wait", session_id=<id>)` to block until done (or `poll` to check progress)
 
-Only after the render completes, verify the output:
+Only after the render completes, verify the output **and stamp proof for the delivery gate**:
 
 ```bash
 ffprobe -v error -select_streams v:0 -show_entries stream=width,height,duration -of csv=p=0 "$W/visuals.mp4"
+
+# DELIVERY-GATE PROOF (Step 10.6 reads this). The real HyperFrames render MUST run —
+# writing this stamp is how the gate knows graphics takeovers were actually rendered
+# (not hand-burned / skipped). N = graphics-takeover count from the plan.
+mkdir -p "$W/.gate"
+python3 - "$W" <<'PY'
+import json, sys, subprocess, os
+W = sys.argv[1]
+plan = json.load(open(f"{W}/plan.json"))
+n = len(plan.get("takeovers", []))
+vis = f"{W}/visuals.mp4"
+# visuals.mp4 must exist and be a real, non-trivial video (>0.5s, 1080x1920).
+probe = subprocess.run(["ffprobe","-v","error","-select_streams","v:0",
+    "-show_entries","stream=width,height:format=duration","-of","json", vis],
+    capture_output=True, text=True)
+assert probe.returncode == 0, f"visuals.mp4 not a valid video — HyperFrames render did not run: {probe.stderr}"
+meta = json.loads(probe.stdout)
+w = meta["streams"][0]["width"]; h = meta["streams"][0]["height"]
+d = float(meta["format"]["duration"])
+assert (w, h) == (1080, 1920), f"visuals.mp4 dims {w}x{h} != 1080x1920"
+assert d > 0.5, f"visuals.mp4 duration {d}s too short — render produced nothing"
+json.dump({"rendered": n, "engine": "hyperframes@0.7.5", "fallback": False,
+           "visuals_s": round(d, 2)}, open(f"{W}/.gate/hyperframes.json", "w"))
+print(f"[gate-stamp] hyperframes: {n} graphics takeovers rendered, visuals {d:.1f}s")
+PY
 ```
 
 ### Step 6 — Grade + audio mux (bed untouched, SFX under, ONE pass)
@@ -705,6 +737,23 @@ run_skill c-reel-premium \
   CAP_TOP="1180" \
   CAPTIONS="${CAPTIONS:-on}" \
   SFX="${SFX:-on}"
+
+# DELIVERY-GATE PROOF (Step 10.6 reads this). c-reel-premium is the SOLE kinetic-caption
+# + SFX + grade pass. Hand-burning captions with raw ffmpeg/drawtext is a DEFECT and will
+# NOT write this stamp → the gate blocks upload. polished.mp4 must exist and differ from
+# the input (proving the pass actually transformed the video).
+mkdir -p "$W/.gate"
+python3 - "$W" "$REEL_IN" "$REEL_OUT" <<'PY'
+import sys, os, json
+W, rin, rout = sys.argv[1], sys.argv[2], sys.argv[3]
+assert os.path.exists(rout) and os.path.getsize(rout) > 100_000, \
+    f"c-reel-premium output {rout} missing/empty — the premium pass did not run"
+assert os.path.getsize(rout) != os.path.getsize(rin), \
+    "polished.mp4 is byte-identical to the input — c-reel-premium was a no-op (captions not burned)"
+json.dump({"applied": True, "captions": os.environ.get("CAPTIONS", "on"),
+           "sfx": os.environ.get("SFX", "on")}, open(f"{W}/.gate/premium.json", "w"))
+print("[gate-stamp] premium: kinetic captions + SFX + grade applied")
+PY
 ```
 
 ### Step 7.5 — Overlay-FX beats (OPTIONAL — Director-placed, OFF by default)
@@ -935,6 +984,72 @@ bash .hub/c-eval-runner/scripts/eval-run.sh base.mp4 --recipe-dir "$SKILL_DIR" -
 See `.hub/c-eval-runner/SKILL.md` for the spec format + built-in checks, and
 `cfw-skills-pack/docs/skills-audit.md` §4 for the generic eval architecture.
 
+### Step 10.6 — DELIVERY GATE (MECHANICAL · HARD · blocks upload)
+
+**This gate is NON-NEGOTIABLE and runs immediately before Step 11. If it exits non-zero, STOP —
+do NOT run `cfw-upload`, do NOT call `propose_composition`.** It proves — mechanically, not
+perceptually — that the premium reel pipeline actually ran, so a weak/rushed executor cannot ship a
+degraded reel (missing HyperFrames graphics, hand-burned captions) as if it were premium. The three
+proof-stamps come from Step 5 (`hyperframes.json`), Step 7 (`premium.json`), and — if the render
+truly failed — the Fallback section's stamp.
+
+```bash
+python3 - "$W" "$OUT" <<'PY' || { echo "🚫 DELIVERY BLOCKED — see failures above. Fix the render and re-run Steps 5–7; do NOT upload or propose_composition."; exit 1; }
+import json, os, sys, subprocess
+W, OUT = sys.argv[1], sys.argv[2]
+fail = []
+
+plan = json.load(open(f"{W}/plan.json"))
+planned_tk = len(plan.get("takeovers", []))
+
+# 1) HyperFrames graphics takeovers actually rendered (or a LEGITIMATE logged fallback).
+hf_path = f"{W}/.gate/hyperframes.json"
+if not os.path.exists(hf_path):
+    fail.append("Step 5 HyperFrames stamp missing — the graphics render never ran (or was skipped).")
+else:
+    hf = json.load(open(hf_path))
+    if hf.get("fallback"):
+        if len(hf.get("reason", "")) <= 25:
+            fail.append("HyperFrames fallback used without a real reason — looks like a skip, not a fault.")
+    elif planned_tk > 0 and hf.get("rendered", 0) < planned_tk:
+        fail.append(f"Only {hf.get('rendered',0)}/{planned_tk} planned graphics takeovers rendered.")
+
+# 2) Premium pass (kinetic captions + SFX + grade) actually applied.
+pr_path = f"{W}/.gate/premium.json"
+if not os.path.exists(pr_path) or not json.load(open(pr_path)).get("applied"):
+    fail.append("Step 7 premium stamp missing — captions were NOT burned by c-reel-premium "
+                "(raw ffmpeg/drawtext caption burns are a defect).")
+
+# 3) Final deliverable exists, is 1080x1920, and is non-trivial.
+probe = subprocess.run(["ffprobe","-v","error","-select_streams","v:0",
+    "-show_entries","stream=width,height:format=duration","-of","json", OUT],
+    capture_output=True, text=True)
+if probe.returncode != 0:
+    fail.append(f"final MP4 {OUT} is not a valid video.")
+else:
+    m = json.loads(probe.stdout)
+    w, h = m["streams"][0]["width"], m["streams"][0]["height"]
+    if (w, h) != (1080, 1920):
+        fail.append(f"final dims {w}x{h} != 1080x1920.")
+
+# 4) c-eval-runner scorecard must not be FAIL (if it was run — it is mandatory in the QA gate).
+sc = f"{os.path.dirname(OUT)}/eval/scorecard.json"
+if os.path.exists(sc):
+    verdict = json.load(open(sc)).get("verdict")
+    if verdict == "FAIL":
+        fail.append("c-eval-runner scorecard verdict = FAIL.")
+else:
+    fail.append("c-eval-runner scorecard missing — run the QA gate (above) before delivery.")
+
+if fail:
+    print("DELIVERY GATE FAILURES:")
+    for f in fail:
+        print(f"  ✗ {f}")
+    sys.exit(1)
+print("✅ DELIVERY GATE PASSED — HyperFrames graphics + premium captions verified. OK to upload.")
+PY
+```
+
 ### Step 11 — Upload to R2 and print the URL (LAST LINE)
 
 Upload BOTH the with-cover MP4 and the cover PNG as separate Outputs:
@@ -949,13 +1064,33 @@ cfw-upload "$COVER_PNG" 2>/dev/null || bash _scripts/upload-to-recordings.sh "$C
 Clean up `$W` after both URLs are confirmed.
 **Print the R2 public URL of `$OUT` as the final line of output.** Never print an input URL.
 
-## Fallback assembly (v0.4 ffmpeg overlay — if HyperFrames render fails)
+## Fallback assembly (v0.4 ffmpeg overlay — ONLY if HyperFrames render genuinely fails)
 
-If `npx hyperframes@0.7.5 render` fails after `hyperframes doctor` (chromium/memory), fall back to the
-proven v0.4 ffmpeg technique: render each takeover as a standalone HyperFrames composition, overlay
-on the bed with `overlay=enable='between(t,a,b)'` + `setpts=PTS-STARTPTS+start/TB`, `-map 0:a` for
-the unbroken audio, then burn plain SRT captions. B-roll beats are handled the same way as Step 6b
-(time-gated overlay — no HyperFrames needed for them). The cover rule (Step 10) still runs.
+**This is NOT the easy path. It is permitted ONLY after `npx hyperframes@0.7.5 render` has actually
+failed and `hyperframes doctor` confirms an environment fault (chromium/memory).** Never skip the
+HyperFrames render to "save time" — a title-only or caption-only reel is a defect. If (and only if)
+the render truly fails, fall back to the proven v0.4 ffmpeg technique: render each takeover as a
+standalone HyperFrames composition, overlay on the bed with `overlay=enable='between(t,a,b)'` +
+`setpts=PTS-STARTPTS+start/TB`, `-map 0:a` for the unbroken audio. B-roll beats are handled the same
+way as Step 6b. The cover rule (Step 10) still runs.
+
+**Two hard rules for the fallback path:**
+1. **Step 7 (c-reel-premium) still runs** — the fallback replaces only the graphics render, never
+   the kinetic-caption/SFX/grade pass. Do NOT "burn plain SRT captions" as a substitute for premium.
+2. **Stamp the fallback with a reason** so the Step 10.6 gate can tell a real fault from a skip:
+   ```bash
+   mkdir -p "$W/.gate"
+   REASON="${1:-hyperframes render failed — doctor confirmed environment fault}"
+   # Paste the actual doctor/render error into REASON. An empty or generic reason FAILS the gate.
+   python3 - "$W" "$REASON" <<'PY'
+   import json, sys
+   W, reason = sys.argv[1], sys.argv[2]
+   assert len(reason) > 25, "fallback reason too short — paste the real render/doctor error"
+   json.dump({"rendered": 0, "engine": "ffmpeg-v0.4-fallback", "fallback": True,
+              "reason": reason}, open(f"{W}/.gate/hyperframes.json", "w"))
+   print("[gate-stamp] hyperframes: FALLBACK path — reason logged")
+   PY
+   ```
 
 ## Notes & gotchas
 

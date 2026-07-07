@@ -32,6 +32,36 @@ ffmpeg -i "$BG_IMG" -i "$AVATAR_GREEN" \
 **alternating left / right across pip beats**. The old circular/plain-rect PIP is **RETIRED as the
 default** (kept only as the "Legacy" note at the bottom of this section).
 
+> ### ⚠️ CLONE-FROM-CIRCULAR TRAP — read before you copy a build script
+> The framed-inset avatar is produced by **exactly two** compositing steps and **nothing else** on
+> the face: **(1)** the rounded-rect `pip-mask.png` applied via `alphamerge`, and **(2)** the
+> `pip-frame.png` overlay (gold border + soft outer shadow). The corner radius, the gold border and
+> the drop-shadow are the ONLY treatments — the face must show **fully, edge-to-edge, evenly lit**
+> inside the rounded-rect, at the **same brightness as the source avatar**. **No circle/oval mask, no
+> vignette, no darkening, no second overlay on the face.**
+>
+> **`pip-frame.png` is overlaid ON TOP of the face — so its interior MUST be fully transparent
+> (alpha≈0).** The drop-shadow must be drawn **strictly OUTSIDE** the rounded-rect (in the 48px pad
+> ring), never as a filled/inner shadow. A frame whose interior is a filled+blurred black rect (a
+> common generator bug — see step 2b below) darkens the whole face by ~55%. If the composited face is
+> darker than the raw avatar, the frame shadow is bleeding inward — that is the cause, not the key.
+>
+> **The legacy circular PIP (e.g. `06.19-coaches-dfy/coaches-build.sh`) clips the avatar to a circle
+> with a `geq` ellipse alpha:**
+> ```
+> geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte((X-180)*(X-180)+(Y-180)*(Y-180),180*180),alpha(X,Y),0)'
+> ```
+> **If you clone a circular-PIP production and leave that `geq` (or any `circle-mask.png` /
+> `gold-ring.png` asset) in the avatar filterchain, the round crop shows as a BLACK OVAL over/around
+> the face inside the rounded-rect frame.** When switching a clone to framed-inset you MUST:
+> 1. **DELETE** the `geq=...a='if(lte(...))'` circle/ellipse step from the avatar filterchain.
+> 2. **DELETE** the leftover `circle-mask.png` and `gold-ring.png` assets so nothing can reference them.
+> 3. Use ONLY the `pip-mask.png` (rounded-rect) `alphamerge` + `pip-frame.png` overlay below.
+>
+> Grep the cloned build before rendering: `grep -nE "geq|circle|ellipse|gold-ring" build.sh` must return
+> **nothing** in the avatar/PIP path. Then vision-QA 3–4 pip beats: face fully visible, no oval, border +
+> shadow clean, corners alternating.
+
 **Geometry (1920×1080 canvas):**
 
 | Property | Value | % of frame |
@@ -60,17 +90,42 @@ work = sys.argv[1]
 m = Image.new("L",(W,H),0)
 ImageDraw.Draw(m).rounded_rectangle([0,0,W-1,H-1], radius=R, fill=255)
 m.save(f"{work}/pip-mask.png")
-# (2) frame overlay: soft drop shadow (behind) + gold border, transparent centre
+# (2) frame overlay: EXTERNAL-ONLY soft drop shadow + gold border, FULLY TRANSPARENT centre.
+from PIL import ImageChops
 CW,CH = W+2*PAD, H+2*PAD
+# 2a. blurred shadow from a filled rounded-rect (offset +6 down)
 sh = Image.new("RGBA",(CW,CH),(0,0,0,0))
 ImageDraw.Draw(sh).rounded_rectangle([PAD,PAD+6,PAD+W-1,PAD+H-1+6], radius=R, fill=(0,0,0,150))
 sh = sh.filter(ImageFilter.GaussianBlur(22))
+# 2b. ⚠️ PUNCH OUT the card interior so the shadow is STRICTLY OUTSIDE the rounded-rect and
+#     NEVER covers the avatar face. WITHOUT this step the blurred black fill (alpha ~150) sits
+#     over the whole face when the frame is overlaid on top → the face renders ~55% darker than
+#     the source avatar. This is the single most important line in the frame generator.
+cut = Image.new("L",(CW,CH),0)
+ImageDraw.Draw(cut).rounded_rectangle([PAD,PAD,PAD+W-1,PAD+H-1], radius=R, fill=255)
+sh.putalpha(ImageChops.subtract(sh.getchannel("A"), cut))   # clear shadow inside the card
+# 2c. gold border riding the card edge (thin 4px ring at the rounded-rect boundary)
 bd = Image.new("RGBA",(CW,CH),(0,0,0,0))
 ImageDraw.Draw(bd).rounded_rectangle([PAD,PAD,PAD+W-1,PAD+H-1], radius=R, outline=GOLD, width=BW)
 Image.alpha_composite(sh,bd).save(f"{work}/pip-frame.png")
 PY
 # Assets: $WORK/pip-mask.png (304×380) + $WORK/pip-frame.png (400×476, border+shadow).
+# INVARIANT — pip-frame.png interior (inside the rounded-rect, past the 4px border) must be
+# alpha≈0. The drop-shadow lives ONLY in the 48px pad OUTSIDE the card. Verify before rendering:
+#   python3 -c "from PIL import Image; import numpy as np; \
+#     a=np.asarray(Image.open('$WORK/pip-frame.png').convert('RGBA'))[56:420,56:344,3]; \
+#     print('frame interior mean alpha', a.mean())   # must be < 1.0, NOT ~140"
 ```
+
+> ### ⚠️ QA GATE — composited PIP face brightness MUST match the source avatar
+> After compositing, extract the PIP crop at 3–4 pip beats and compare the **face-region mean
+> luminance** against the same region of the **raw** avatar (`avatar-green-raw.mp4`, before keying).
+> They must be close (within ~10–15%). **If the composited face is markedly darker (~2–3×), the
+> `pip-frame.png` drop-shadow is bleeding INWARD over the face** — its interior alpha is non-zero.
+> Regenerate the frame with the interior punch-out above (step 2b). Do NOT "fix" it by adding an
+> `eq`/`curves` brightness lift on the avatar — that masks the bug; remove the inward shadow instead.
+> (A mild lift `eq=brightness=0.03:contrast=1.05` is only acceptable AFTER the overlay is gone, if the
+> face still reads dim on dark-card beats.)
 
 ### Alternation helper (per pip beat)
 
@@ -135,6 +190,11 @@ ffmpeg \
 The **frame overlay is applied ON TOP** of the placed card so the gold border rides the card edge
 and the soft shadow falls on the background ring around it (never over the avatar). Chroma-key runs
 **only on the green-screen path**; the studio path keeps its own background inside the card.
+
+**The avatar filterchain contains NO `geq`/circle/ellipse/vignette step** — the only alpha applied to
+the face is the rounded-rect `alphamerge` with `pip-mask.png`. If you see `geq=...a='if(lte(...))'`
+anywhere in the `[person]`/`[card_raw]` chain, it is a circular-PIP leftover (see the Clone-From-Circular
+Trap warning above) and MUST be removed, or a black oval will appear over the face.
 
 ### Legacy plain-rect / circular PIP — RETIRED as default (do not use for new work)
 

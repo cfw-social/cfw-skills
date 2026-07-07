@@ -176,6 +176,20 @@ beats** (`72px` margin; right-beat `x=1544,y=628`, left-beat `x=72,y=628`). Owne
 than that reference. The old circular / plain-rect `384×330` PIP is **retired as the default**.
 Graphics templates reserve the bottom band; captions clear whichever bottom corner the PIP occupies.
 
+> ⚠️ **Clone-from-circular trap:** the framed-inset face carries ONLY the rounded-rect `pip-mask.png`
+> `alphamerge` + `pip-frame.png` overlay — no circle/oval/vignette. If you clone a circular-PIP build
+> (e.g. `06.19-coaches-dfy/`), you MUST delete its `geq=...a='if(lte((X-cx)²+(Y-cy)²,r²)…)'` ellipse
+> step and any `circle-mask.png`/`gold-ring.png` asset, or a **black oval** appears over the face.
+> Grep the build (`grep -nE "geq|circle|ellipse|gold-ring"`) — it must be clean before rendering. Full
+> detail: `c-ffmpeg/references/landscape-pip.md` § "Clone-From-Circular Trap".
+>
+> ⚠️ **Frame-shadow darkening trap:** `pip-frame.png` is overlaid ON TOP of the face, so its **interior
+> must be fully transparent (alpha≈0)** and its drop-shadow drawn **strictly OUTSIDE** the rounded-rect.
+> A frame generated as a filled+blurred black rect (no interior punch-out) darkens the whole face ~55%.
+> **QA gate:** the composited PIP face luminance must match the source avatar — if it's ~2–3× darker,
+> the frame shadow is bleeding inward; regenerate the frame with the interior punch-out (step 2b in
+> `landscape-pip.md`). Do NOT mask it with an `eq`/`curves` brightness lift.
+
 **VSL engine inputs (beyond the Format Parameter Table):**
 
 | Param | Required | Default | Notes |
